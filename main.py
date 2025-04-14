@@ -1,293 +1,186 @@
-# import qrcode
-
-# img = qrcode.make("Hello World")
-# type(img)
-# img.save("shubhang.png")
-
 from PIL import Image
 from reedsolo import RSCodec
 
-class QRCode:
-    def __init__(self):
-        pass
-
-L = 80
-M = 64
-Q = 48
-H = 36
-
-
-# https://franckybox.com/wp-content/uploads/qrcode.pdf
-def get_alignment_positions(version):
-    positions = []
-    if version > 1:
-        n_patterns = version // 7 + 2
-        first_pos = 6
-        positions.append(first_pos)
-        matrix_width = 4 * version + 17
-        last_pos = matrix_width - 1 - first_pos
-        second_last_pos = (
-        (first_pos + last_pos * (n_patterns - 2)
-        + (n_patterns - 1) // 2)
-        // (n_patterns - 1)
-        ) & -2
-        pos_step = last_pos - second_last_pos
-        second_pos = last_pos - (n_patterns - 2) * pos_step
-        positions.extend(range(second_pos, last_pos + 1, pos_step))
-    return positions
-
-# print(get_alignment_positions(2))
-
-# 6,6 | 6,18 | 18,6 | 18,18
-
-
-# https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.new
-im = Image.new('L',(25,25))
-
-# This Visited gonna store which pixels have been drawn
+# Create image with quiet zone (25x25 QR + 4-module border on each side)
+im = Image.new('L', (33, 33), 255)  # White background
 visited = set()
 
-def draw_alignment_area(x,y):
+# Offset to center the 25x25 QR code in the 33x33 image
+offset = 4
+
+def draw_alignment_area(x, y):
+    x, y = x + offset, y + offset
     for i in range(7):
-        visited.add((x+0,y+i))
-        visited.add((x+i,y+0))
-        visited.add((x+6,y+i))
-        visited.add((x+i,y+6))
+        visited.add((x, y + i))
+        visited.add((x + i, y))
+        visited.add((x + 6, y + i))
+        visited.add((x + i, y + 6))
+        im.putpixel((x, y + i), 0)
+        im.putpixel((x + i, y), 0)
+        im.putpixel((x + 6, y + i), 0)
+        im.putpixel((x + i, y + 6), 0)
+    for i in range(1, 6):
+        im.putpixel((x + 1, y + i), 255)
+        im.putpixel((x + i, y + 1), 255)
+        im.putpixel((x + 5, y + i), 255)
+        im.putpixel((x + i, y + 5), 255)
+        visited.add((x + 1, y + i))
+        visited.add((x + i, y + 1))
+        visited.add((x + 5, y + i))
+        visited.add((x + i, y + 5))
+    for i in range(2, 5):
+        im.putpixel((x + 2, y + i), 0)
+        im.putpixel((x + i, y + 2), 0)
+        im.putpixel((x + 4, y + i), 0)
+        im.putpixel((x + i, y + 4), 0)
+        visited.add((x + 2, y + i))
+        visited.add((x + i, y + 2))
+        visited.add((x + 4, y + i))
+        visited.add((x + i, y + 4))
 
-        im.putpixel((x+0,y+i),0)
-        im.putpixel((x+i,y+0),0)
-        im.putpixel((x+6,y+i),0)
-        im.putpixel((x+i,y+6),0)
-
-    for i in range(1,6):
-        visited.add((x+1,y+i))
-        visited.add((x+i,y+1))
-        visited.add((x+5,y+i))
-        visited.add((x+i,y+5))
-
-        im.putpixel((x+1,y+i),255)
-        im.putpixel((x+i,y+1),255)
-        im.putpixel((x+5,y+i),255)
-        im.putpixel((x+i,y+5),255)
-    
-    for i in range(2,5):
-        visited.add((x+2,y+i))
-        visited.add((x+i,y+2))
-        visited.add((x+4,y+i))
-        visited.add((x+i,y+4))
-
-        im.putpixel((x+2,y+i),0)
-        im.putpixel((x+i,y+2),0)
-        im.putpixel((x+4,y+i),0)
-        im.putpixel((x+i,y+4),0)
-    
 def draw_outer_alignment_area():
     for i in range(8):
-        visited.add((7,i))
-        visited.add((i,7))
-        visited.add((i,17))
-        visited.add((7,17+i))
-        visited.add((17,i))
-        visited.add((17+i,7))
+        coords = [(7, i), (i, 7), (i, 17), (7, 17 + i), (17, i), (17 + i, 7)]
+        for dx, dy in coords:
+            x, y = dx + offset, dy + offset
+            im.putpixel((x, y), 255)
+            visited.add((x, y))
 
-        im.putpixel((7,i),255)
-        im.putpixel((i,7),255)
-        im.putpixel((i,17),255)
-        im.putpixel((7,17+i),255)
-        im.putpixel((17,i),255)
-        im.putpixel((17+i,7),255)
+def draw_alignment_pattern(cx, cy):
+    cx, cy = cx + offset, cy + offset
+    for i in range(5):
+        for j in range(5):
+            x, y = cx - 2 + i, cy - 2 + j
+            im.putpixel((x, y), 0)
+            visited.add((x, y))
+    for i in range(3):
+        for j in range(3):
+            x, y = cx - 1 + i, cy - 1 + j
+            im.putpixel((x, y), 255)
+            visited.add((x, y))
+    im.putpixel((cx, cy), 0)
+    visited.add((cx, cy))
 
 def draw_timing_strips():
-    # 9 Alternating Squares is for qr code version 2  >> format strips
+    for i in range(8, 17, 2):
+        im.putpixel((6 + offset, i + offset), 0)
+        im.putpixel((i + offset, 6 + offset), 0)
+        visited.add((6 + offset, i + offset))
+        visited.add((i + offset, 6 + offset))
+    for i in range(9, 16, 2):
+        im.putpixel((6 + offset, i + offset), 255)
+        im.putpixel((i + offset, 6 + offset), 255)
+        visited.add((6 + offset, i + offset))
+        visited.add((i + offset, 6 + offset))
 
-    # Timing Strip Middle Left
-    for i in range(8,17,2):
-        if (6,i) not in visited:
-            im.putpixel((6,i),0)
-            visited.add((6,i))
-    for i in range(9,16,2):
-        if (6,i) not in visited:
-            im.putpixel((6,i),255)
-            visited.add((6,i))
-    
-    # Timing Strip Middle Top
-    for i in range(8,17,2):
-        if (i,6) not in visited:
-            im.putpixel((i,6),0)
-            visited.add((i,6))
-    for i in range(9,16,2):
-        if (i,6) not in visited:
-            im.putpixel((i,6),255)
-            visited.add((i,6))
-    
-def draw_format_strips():
-    # Format Strip Lower Left
-    for i in range(18,25):
-        im.putpixel((8,i),100)
-        visited.add((8,i))
+def draw_format_strips(format_info):
+    # Top-left horizontal
+    positions = [(0, 8), (1, 8), (2, 8), (3, 8), (4, 8), (5, 8), (7, 8), (8, 8)]
+    bits = [14, 13, 12, 11, 10, 9, 8, 7]
+    for (dx, dy), bit_idx in zip(positions, bits):
+        x, y = dx + offset, dy + offset
+        color = 0 if format_info[bit_idx] == '1' else 255
+        im.putpixel((x, y), color)
+        visited.add((x, y))
+    # Top-left vertical
+    positions = [(8, 0), (8, 1), (8, 2), (8, 3), (8, 4), (8, 5), (8, 7), (8, 8)]
+    bits = [7, 6, 5, 4, 3, 2, 1, 0]
+    for (dx, dy), bit_idx in zip(positions, bits):
+        x, y = dx + offset, dy + offset
+        color = 0 if format_info[bit_idx] == '1' else 255
+        im.putpixel((x, y), color)
+        visited.add((x, y))
+    # Bottom-left vertical
+    positions = [(8, 24), (8, 23), (8, 22), (8, 21), (8, 20), (8, 19), (8, 18), (8, 17)]
+    bits = [7, 6, 5, 4, 3, 2, 1, 0]
+    for (dx, dy), bit_idx in zip(positions, bits):
+        x, y = dx + offset, dy + offset
+        color = 0 if format_info[bit_idx] == '1' else 255
+        im.putpixel((x, y), color)
+        visited.add((x, y))
+    # Top-right horizontal
+    positions = [(24, 8), (23, 8), (22, 8), (21, 8), (20, 8), (19, 8), (18, 8), (17, 8)]
+    bits = [14, 13, 12, 11, 10, 9, 8, 7]
+    for (dx, dy), bit_idx in zip(positions, bits):
+        x, y = dx + offset, dy + offset
+        color = 0 if format_info[bit_idx] == '1' else 255
+        im.putpixel((x, y), color)
+        visited.add((x, y))
 
-    # Format strips Middle Left and Middle Top
-    for i in range(0,9):
-        if (i,8) not in visited:
-            im.putpixel((i,8),100)
-            visited.add((i,8))
-    for i in range(0,9):
-        if (8,i) not in visited:
-            im.putpixel((8,i),100)
-            visited.add((8,i))
-    
-    for i in range(17,25):
-        if (i,8) not in visited:
-            im.putpixel((i,8),100)
-            visited.add((i,8))
-    
 def draw_one_black_pixel():
-    im.putpixel((8,18),0)
-    visited.add((8,18))
+    im.putpixel((8 + offset, 17 + offset), 0)
+    visited.add((8 + offset, 17 + offset))
 
-def draw_encoding():
-    x=24
-    y=24
-    byte = ["0","1","0","0"]
-    for k in range(0,len(byte),4):
-        a = k
-        b = a + 1
-        c = a + 2
-        d = a + 3
-        if byte[a] == "0":
-            im.putpixel((x,y),255)
-        else:
-            im.putpixel((x,y),0)
-        if byte[b] == "0":
-            im.putpixel((x-1,y),255)
-        else:
-            im.putpixel((x-1,y),0)
-        if byte[c] == "0":
-            im.putpixel((x,y-1),255)
-        else:
-            im.putpixel((x,y-1),0)
-        if byte[d] == "0":
-            im.putpixel((x-1,y-1),255)
-        else:
-            im.putpixel((x-1,y-1),0)
+def mask_condition(x, y, mask_number):
+    if mask_number == 0:
+        return (x + y) % 2 == 0
+    return False  # Add other mask patterns if needed
 
-def draw_message_length(message):
-    x = 24
-    y = 22
-    message_length = len(message)
-    # TODO: FIX if length not in 4 and add visited checks
-    length_in_bytes = format(message_length,'b')
-    byte = [num for num in length_in_bytes]
+def apply_mask(im, visited, mask_number):
+    for y in range(33):
+        for x in range(33):
+            if (x, y) not in visited and offset <= x < 25 + offset and offset <= y < 25 + offset:
+                if mask_condition(x - offset, y - offset, mask_number):
+                    current_value = im.getpixel((x, y))
+                    new_value = 255 if current_value == 0 else 0
+                    im.putpixel((x, y), new_value)
 
-    for k in range(0,len(byte),4):
-        a = k
-        b = a + 1
-        c = a + 2
-        d = a + 3
-        if byte[a] == "0":
-            visited.add((x,y))
-            im.putpixel((x,y),255)
-        else:
-            visited.add((x,y))
-            im.putpixel((x,y),0)
-        if byte[b] == "0":
-            visited.add((x,y))
-            im.putpixel((x-1,y),255)
-        else:
-            visited.add((x,y))
-            im.putpixel((x-1,y),0)
-        if byte[c] == "0":
-            visited.add((x,y))
-            im.putpixel((x,y-1),255)
-        else:
-            visited.add((x,y))
-            im.putpixel((x,y-1),0)
-        if byte[d] == "0":
-            visited.add((x,y))
-            im.putpixel((x-1,y-1),255)
-        else:
-            visited.add((x,y))
-            im.putpixel((x-1,y-1),0)
-        x = x - 0
-        y = y - 2
-    return x ,y 
-
-
-def draw(x,y,color):
-    if (x,y) not in visited or x > 24 or x < 0 or y > 24 or y < 0:
-        visited.add((x,y))
-        im.putpixel((x,y),color)
-        return True
-    else:
-        print("Already Visited (x,y)",x,y)
-        return False
-
-
-def draw_data(data_string,x,y):
-    converted_bytes = [format(ord(char),'b') for char in data_string]
+def place_data(bit_stream):
+    x, y = 24 + offset, 24 + offset  # Bottom-right corner
     reverse = False
-    for byte in converted_bytes:
-        zeroes_to_append = (8 - len(byte))  * [str(0)]
-        pp = zeroes_to_append + [c for c in byte]
-        print(pp)
-        # 0->7  --> 8 digits
-        for i in range(0,8,2):
-            if pp[i] == "0":
-                draw(x,y,255)
-            else:
-                draw(x,y,0)
-            if pp[i+1] == "0":
-                draw(x-1,y,255)
-            else:
-                draw(x-1,y,0)
-            if reverse:
-                next_cord = (x,y+1)
-            else:
-                next_cord = (x,y-1)
-            
-            if next_cord not in visited or next_cord[1] <= 24 or next_cord[1] >= 0:
-                y = next_cord[1]
-            else:
-                print("THIS IS IN VISITED",next_cord)
-                x = x - 2
-                if reverse:
-                    reverse = False
-                else:
-                    reverse = True
-    return x,y
+    bit_idx = 0
+    while bit_idx < len(bit_stream) and x >= offset:
+        for col in [x, x - 1]:
+            if col < offset:
+                continue
+            while offset <= y < 25 + offset:
+                if (col, y) not in visited:  # Skip functional patterns
+                    color = 0 if bit_stream[bit_idx] == '1' else 255
+                    im.putpixel((col, y), color)
+                    # Do NOT add to visited
+                    bit_idx += 1
+                    if bit_idx >= len(bit_stream):
+                        return
+                y += -1 if reverse else 1
+            y = 24 + offset if reverse else offset
+            reverse = not reverse
+        x -= 2
 
-
-
-
-
-
-# Prerequisite Part 
-# Upper Left Alignment Area
-draw_alignment_area(0,0)
-# Lower Left Alignment Area
-draw_alignment_area(0,18)
-# Upper Right Alignment Area
-draw_alignment_area(18,0)
+# Draw structural patterns
+draw_alignment_area(0, 0)
+draw_alignment_area(0, 18)
+draw_alignment_area(18, 0)
+draw_alignment_pattern(18, 18)
 draw_outer_alignment_area()
 draw_timing_strips()
-draw_format_strips()
+format_info = "111010110100100"  # Level L, Mask 0
+draw_format_strips(format_info)
 draw_one_black_pixel()
 
-
-# Encoding Part
-# 0 -> White
-# 1 -> Black
-# 0100 -> Binary
-draw_encoding()
-
-
-# Message Part
+# Encode data
 message = "shubhang"
+mode_bits = "0100"  # Byte mode
+count_bits = format(len(message), '08b')
+data_bits = ''.join(format(ord(char), '08b') for char in message)
+bit_stream = mode_bits + count_bits + data_bits
+remainder = 8 - (len(bit_stream) % 8) if len(bit_stream) % 8 != 0 else 0
+bit_stream += "0" * remainder
+padding_codewords = ["11101100", "00010001"]
+while len(bit_stream) < 272:
+    bit_stream += padding_codewords[len(bit_stream) // 8 % 2]
+bit_stream = bit_stream[:272]
 
-x,y = draw_message_length(message)
-x,y = draw_data(message,x,y)
-# draw_readsolomo_code(x,y)
+# Error correction
+rsc = RSCodec(10)
+data_bytes = [int(bit_stream[i:i+8], 2) for i in range(0, 272, 8)]
+encoded = rsc.encode(bytes(data_bytes))
+all_bits = ''.join(format(byte, '08b') for byte in encoded)
 
+# Place data and apply mask
+place_data(all_bits)
+mask_number = 0
+apply_mask(im, visited, mask_number)
+
+# Save and display
+im.save("shubhang_qr.png")
 im.show()
-
-
